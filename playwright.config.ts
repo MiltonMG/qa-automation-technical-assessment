@@ -10,11 +10,16 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
 
-  reporter: [
-    ['list'],
-    ['html', { open: 'never', outputFolder: 'playwright-report' }],
-    ['junit', { outputFile: 'test-results/junit.xml' }],
-  ],
+  reporter: process.env.CI
+    ? [
+        ['blob', { outputDir: 'blob-report' }],
+        ['junit', { outputFile: 'test-results/junit.xml' }],
+      ]
+    : [
+        ['list'],
+        ['html', { open: 'never', outputFolder: 'playwright-report' }],
+        ['junit', { outputFile: 'test-results/junit.xml' }],
+      ],
 
   use: {
     trace: 'on',

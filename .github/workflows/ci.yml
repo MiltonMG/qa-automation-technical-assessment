@@ -29,18 +29,19 @@ jobs:
       - name: Run API tests
         run: npm run test:api
         env:
+          CI: true
           REQRES_BASE_URL: ${{ secrets.REQRES_BASE_URL }}
           REQRES_API_KEY: ${{ secrets.REQRES_API_KEY }}
           REQRES_VALID_EMAIL: ${{ secrets.REQRES_VALID_EMAIL }}
           REQRES_VALID_PASSWORD: ${{ secrets.REQRES_VALID_PASSWORD }}
 
-      - name: Upload API test results
+      - name: Upload blob report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: api-test-results
-          path: test-results/
-          retention-days: 14
+          name: blob-report-api
+          path: blob-report/
+          retention-days: 1
 
       - name: Upload JUnit results
         if: always()
@@ -75,23 +76,25 @@ jobs:
       - name: Run UI tests
         run: npm run test:ui
         env:
+          CI: true
           SAUCEDEMO_BASE_URL: ${{ secrets.SAUCEDEMO_BASE_URL }}
           SAUCEDEMO_STANDARD_USERNAME: ${{ secrets.SAUCEDEMO_STANDARD_USERNAME }}
           SAUCEDEMO_STANDARD_PASSWORD: ${{ secrets.SAUCEDEMO_STANDARD_PASSWORD }}
           SAUCEDEMO_LOCKED_USERNAME: ${{ secrets.SAUCEDEMO_LOCKED_USERNAME }}
+          SAUCEDEMO_PROBLEM_USERNAME: ${{ secrets.SAUCEDEMO_PROBLEM_USERNAME }}
           SAUCEDEMO_INVALID_USERNAME: ${{ secrets.SAUCEDEMO_INVALID_USERNAME }}
           SAUCEDEMO_INVALID_PASSWORD: ${{ secrets.SAUCEDEMO_INVALID_PASSWORD }}
           CHECKOUT_FIRST_NAME: ${{ secrets.CHECKOUT_FIRST_NAME }}
           CHECKOUT_LAST_NAME: ${{ secrets.CHECKOUT_LAST_NAME }}
           CHECKOUT_POSTAL_CODE: ${{ secrets.CHECKOUT_POSTAL_CODE }}
 
-      - name: Upload Playwright HTML report
+      - name: Upload blob report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-playwright-report
-          path: playwright-report/
-          retention-days: 14
+          name: blob-report-ui
+          path: blob-report/
+          retention-days: 1
 
       - name: Upload screenshots and traces on failure
         if: failure()
@@ -101,16 +104,10 @@ jobs:
           path: test-results/
           retention-days: 14
 
-      - name: Upload Pages artifact
-        if: always()
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: playwright-report/
-
-  # ── Deploy Playwright HTML report to GitHub Pages ────────────────────────
-  deploy-report:
-    name: Deploy report to GitHub Pages
-    needs: test-ui
+  # ── Merge reports and deploy to GitHub Pages ─────────────────────────────
+  merge-report:
+    name: Merge reports & Deploy to GitHub Pages
+    needs: [test-api, test-ui]
     runs-on: ubuntu-latest
     if: always()
     permissions:
@@ -119,7 +116,48 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download API blob report
+        uses: actions/download-artifact@v4
+        with:
+          name: blob-report-api
+          path: all-blob-reports/api
+
+      - name: Download UI blob report
+        uses: actions/download-artifact@v4
+        with:
+          name: blob-report-ui
+          path: all-blob-reports/ui
+
+      - name: Merge reports
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Upload merged HTML report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report/
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
