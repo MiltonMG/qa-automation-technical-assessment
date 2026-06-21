@@ -1,0 +1,29 @@
+{
+  "name": "automation-engineer-assessment",
+  "version": "1.0.0",
+  "description": "QA Automation Technical Assessment — Playwright + TypeScript",
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test --project=api",
+    "test:ui": "playwright test --project=ui",
+    "test:ui:checkout": "playwright test --project=ui --grep @checkout --headed",
+    "test:headed": "playwright test --project=ui --headed",
+    "test:report": "playwright show-report",
+    "docs:generate": "ts-node --esm scripts/generate-docs.ts",
+    "lint": "eslint . --ext .ts --max-warnings 0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.16.0",
+    "@typescript-eslint/parser": "^7.16.0",
+    "docx": "^8.5.0",
+    "dotenv": "^17.4.2",
+    "eslint": "^8.57.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

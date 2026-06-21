@@ -1,0 +1,141 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ── API tests ──────────────────────────────
+  test-api:
+    name: API Tests (ReqRes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run API tests
+        run: npm run test:api
+        env:
+          REQRES_BASE_URL: ${{ secrets.REQRES_BASE_URL }}
+          REQRES_API_KEY: ${{ secrets.REQRES_API_KEY }}
+          REQRES_VALID_EMAIL: ${{ secrets.REQRES_VALID_EMAIL }}
+          REQRES_VALID_PASSWORD: ${{ secrets.REQRES_VALID_PASSWORD }}
+
+      - name: Upload API test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-results
+          path: test-results/
+          retention-days: 14
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-junit-report
+          path: test-results/junit.xml
+          retention-days: 14
+
+  # ── UI tests — installs only Chromium to keep install time low ───────────
+  test-ui:
+    name: UI Tests (Sauce Demo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (Chromium only)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run UI tests
+        run: npm run test:ui
+        env:
+          SAUCEDEMO_BASE_URL: ${{ secrets.SAUCEDEMO_BASE_URL }}
+          SAUCEDEMO_STANDARD_USERNAME: ${{ secrets.SAUCEDEMO_STANDARD_USERNAME }}
+          SAUCEDEMO_STANDARD_PASSWORD: ${{ secrets.SAUCEDEMO_STANDARD_PASSWORD }}
+          SAUCEDEMO_LOCKED_USERNAME: ${{ secrets.SAUCEDEMO_LOCKED_USERNAME }}
+          SAUCEDEMO_INVALID_USERNAME: ${{ secrets.SAUCEDEMO_INVALID_USERNAME }}
+          SAUCEDEMO_INVALID_PASSWORD: ${{ secrets.SAUCEDEMO_INVALID_PASSWORD }}
+          CHECKOUT_FIRST_NAME: ${{ secrets.CHECKOUT_FIRST_NAME }}
+          CHECKOUT_LAST_NAME: ${{ secrets.CHECKOUT_LAST_NAME }}
+          CHECKOUT_POSTAL_CODE: ${{ secrets.CHECKOUT_POSTAL_CODE }}
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload screenshots and traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-failure-artifacts
+          path: test-results/
+          retention-days: 14
+
+      - name: Upload Pages artifact
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report/
+
+  # ── Deploy Playwright HTML report to GitHub Pages ────────────────────────
+  deploy-report:
+    name: Deploy report to GitHub Pages
+    needs: test-ui
+    runs-on: ubuntu-latest
+    if: always()
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ── Summary job — gates merges on both suites passing ────────────────────
+  all-tests-pass:
+    name: All Tests Pass
+    needs: [test-api, test-ui]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.test-api.result }}" != "success" || "${{ needs.test-ui.result }}" != "success" ]]; then
+            echo "One or more test suites failed."
+            exit 1
+          fi
+          echo "All suites passed."
